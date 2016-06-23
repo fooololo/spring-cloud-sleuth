@@ -190,10 +190,7 @@ public class TraceFilter extends GenericFilterBean {
 		if (spanFromRequest != null) {
 			addResponseTags(response, exception);
 			if (spanFromRequest.hasSavedSpan()) {
-				Span parent =  spanFromRequest.getSavedSpan();
-				closeParentSpan(parent);
-			} else {
-				spanFromRequest.logEvent(Span.SERVER_SEND);
+				closeParentSpan(spanFromRequest.getSavedSpan());
 			}
 			closeParentSpan(spanFromRequest);
 			// in case of a response with exception status will close the span when exception dispatch is handled
@@ -221,9 +218,11 @@ public class TraceFilter extends GenericFilterBean {
 			if (log.isDebugEnabled()) {
 				log.debug("Sending the parent span " + parent + " to Zipkin");
 			}
-			parent.logEvent(Span.SERVER_SEND);
 			parent.stop();
+			parent.logEvent(Span.SERVER_SEND);
 			this.spanReporter.report(parent);
+		} else {
+			parent.logEvent(Span.SERVER_SEND);
 		}
 	}
 

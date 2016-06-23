@@ -102,14 +102,28 @@ public class TraceWebAspect {
 	@Around("(anyRestControllerAnnotated() || anyControllerAnnotated()) && anyPublicMethod()")
 	@SuppressWarnings("unchecked")
 	public Object wrapControllerMethodWithCorrelationId(ProceedingJoinPoint pjp) throws Throwable {
-		String spanName = pjp.getSignature().getName();
+		String spanName = toLowerHyphen(pjp.getSignature().getName());
 		Span span = this.tracer.createSpan(spanName);
 		log.debug("Wrapping controller method [" + spanName + "] in a span " + span);
 		try {
+			//Thread.sleep(0, 1);
 			return pjp.proceed();
 		} finally {
 			this.tracer.close(span);
 		}
+	}
+
+	static String toLowerHyphen(String name) {
+		StringBuilder result = new StringBuilder();
+		for (int i = 0; i < name.length(); i++) {
+			char c = name.charAt(i);
+			if (c >= 'A' && c <= 'Z') {
+				result.append('-').append((char) (c + 'a' - 'A'));
+			} else {
+				result.append(c);
+			}
+		}
+		return result.toString();
 	}
 
 	@Around("anyControllerOrRestControllerWithPublicAsyncMethod()")
