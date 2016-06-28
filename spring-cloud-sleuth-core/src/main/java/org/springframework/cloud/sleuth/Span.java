@@ -133,7 +133,9 @@ public class Span {
 	public static final String SPAN_PEER_SERVICE_TAG_NAME = "peer.service";
 
 	private final long begin;
+	private final long beginNanos;
 	private long end = 0;
+	private long endNanos = 0;
 	private final String name;
 	private final long traceId;
 	private List<Long> parents = new ArrayList<>();
@@ -147,7 +149,7 @@ public class Span {
 
 	@SuppressWarnings("unused")
 	private Span() {
-		this(-1, -1, "dummy", 0, Collections.<Long>emptyList(), 0, false, false, null);
+		this(-1, -1, "dummy", 0, Collections.<Long>emptyList(), 0, false, false, null, -1, -1);
 	}
 
 	/**
@@ -157,7 +159,9 @@ public class Span {
 	 */
 	public Span(Span current, Span savedSpan) {
 		this.begin = current.getBegin();
+		this.beginNanos = current.getBeginNanos();
 		this.end = current.getEnd();
+		this.endNanos = current.getEndNanos();
 		this.name = current.getName();
 		this.traceId = current.getTraceId();
 		this.parents = current.getParents();
@@ -173,14 +177,22 @@ public class Span {
 	public Span(long begin, long end, String name, long traceId, List<Long> parents,
 			long spanId, boolean remote, boolean exportable, String processId) {
 		this(begin, end, name, traceId, parents, spanId, remote, exportable, processId,
-				null);
+				null, -1, -1);
+	}
+
+	public Span(long begin, long end, String name, long traceId, List<Long> parents,
+			long spanId, boolean remote, boolean exportable, String processId, long beginNanos, long endNanos) {
+		this(begin, end, name, traceId, parents, spanId, remote, exportable, processId,
+				null, beginNanos, endNanos);
 	}
 
 	public Span(long begin, long end, String name, long traceId, List<Long> parents,
 			long spanId, boolean remote, boolean exportable, String processId,
-			Span savedSpan) {
+			Span savedSpan, long beginNanos, long endNanos) {
 		this.begin = begin <= 0 ? System.currentTimeMillis() : begin;
+		this.beginNanos = beginNanos <=0 ? System.nanoTime() : beginNanos;
 		this.end = end;
+		this.endNanos = endNanos;
 		this.name = name != null ? name : "";
 		this.traceId = traceId;
 		this.parents = parents;
@@ -191,6 +203,13 @@ public class Span {
 		this.savedSpan = savedSpan;
 		this.tags = new LinkedHashMap<>();
 		this.logs = new ArrayList<>();
+	}
+
+	public Span(long begin, long end, String name, long traceId, List<Long> parents,
+			long spanId, boolean remote, boolean exportable, String processId,
+			Span savedSpan) {
+		this(begin, end, name, traceId, parents, spanId, remote,
+				exportable, processId, savedSpan, -1, -1);
 	}
 
 	public static SpanBuilder builder() {
@@ -216,13 +235,22 @@ public class Span {
 	 */
 	@JsonIgnore
 	public synchronized long getAccumulatedMillis() {
-		if (this.begin == 0) {
+		return getAccumulatedNanos() / 1000000;
+	}
+
+	/**
+	 * Return the total amount of time in nanos elapsed since start was called, if running, or
+	 * difference between stop and start
+	 */
+	@JsonIgnore
+	private synchronized long getAccumulatedNanos() {
+		if (this.beginNanos == 0) {
 			return 0;
 		}
-		if (this.end > 0) {
-			return this.end - this.begin;
+		if (this.endNanos > 0) {
+			return this.endNanos - this.beginNanos;
 		}
-		return System.currentTimeMillis() - this.begin;
+		return System.nanoTime() - this.beginNanos;
 	}
 
 	/**
@@ -413,9 +441,19 @@ public class Span {
 		return true;
 	}
 
+	public long getBeginNanos() {
+		return this.beginNanos;
+	}
+
+	public long getEndNanos() {
+		return this.endNanos;
+	}
+
 	public static class SpanBuilder {
 		private long begin;
+		private long beginNanos;
 		private long end;
+		private long endNanos;
 		private String name;
 		private long traceId;
 		private ArrayList<Long> parents = new ArrayList<>();
@@ -435,8 +473,18 @@ public class Span {
 			return this;
 		}
 
+		public Span.SpanBuilder beginNanos(long beginNanos) {
+			this.beginNanos = beginNanos;
+			return this;
+		}
+
 		public Span.SpanBuilder end(long end) {
 			this.end = end;
+			return this;
+		}
+
+		public Span.SpanBuilder endNanos(long endNanos) {
+			this.endNanos = endNanos;
 			return this;
 		}
 
@@ -508,7 +556,7 @@ public class Span {
 		public Span build() {
 			Span span = new Span(this.begin, this.end, this.name, this.traceId,
 					this.parents, this.spanId, this.remote, this.exportable,
-					this.processId, this.savedSpan);
+					this.processId, this.savedSpan, this.beginNanos, this.endNanos );
 			span.logs.addAll(this.logs);
 			span.tags.putAll(this.tags);
 			return span;
@@ -516,12 +564,12 @@ public class Span {
 
 		@Override
 		public String toString() {
-			return "SpanBuilder{" + "begin=" + this.begin + ", end=" + this.end
-					+ ", name=" + this.name + ", traceId=" + this.traceId + ", parents="
-					+ this.parents + ", spanId=" + this.spanId + ", remote=" + this.remote
-					+ ", exportable=" + this.exportable + ", processId='" + this.processId
-					+ '\'' + ", savedSpan=" + this.savedSpan + ", logs=" + this.logs
-					+ ", tags=" + this.tags + '}';
+			return "SpanBuilder{" + "begin=" + this.begin + "beginNanos=" + this.beginNanos
+					+ ", end=" + this.end + ", endNanos=" + this.endNanos + ", name="
+					+ this.name + ", traceId=" + this.traceId + ", parents=" + this.parents
+					+ ", spanId=" + this.spanId + ", remote=" + this.remote + ", exportable="
+					+ this.exportable + ", processId='" + this.processId + '\'' + ", savedSpan="
+					+ this.savedSpan + ", logs=" + this.logs + ", tags=" + this.tags + '}';
 		}
 	}
 }
